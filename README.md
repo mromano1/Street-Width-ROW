@@ -16,4 +16,22 @@ This is a [type of project] designed to [solve a problem / perform a function]. 
 - ✅ Feature 3
 - 🔜 Planned: Feature 4
 
-![Las Vegas Sign](las vegas sign.jpg)
+## Method
+
+So, how did we create this map?  Below is an explanation:
+
+First, we looked online for an interesting angle.
+
+Then, when we found that angle, we started to do some research and gather visualizations.
+
+When we got some ideas, then we started to play around with the widget in Arcgis storymap.  Here is what we decided to include
+
+- Feature 1: explain what it is and the steps it took to create it.  use screenshots
+- Feature 2: same
+- So on
+- and so on
+- ...
+
+## Final report
+
+Final report, Report.docx, can be downloaded above.
