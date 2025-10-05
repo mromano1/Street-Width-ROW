@@ -16,4 +16,4 @@ This is a [type of project] designed to [solve a problem / perform a function]. 
 - ✅ Feature 3
 - 🔜 Planned: Feature 4
 
-![Las Vegas Sign]((https://arcg.is/LWimW1))
+![Las Vegas Sign]((las vegas sign.png))
