@@ -31,6 +31,31 @@ conda activate row
 ```
 ><mark>rtree</mark> is optional but speeds up spatial operations.
 
+flowchart TD
+    A[Start] --> B[Load Roadbed & Sidewalk Shapefiles<br/>via GeoPandas/Fiona]
+    B --> C[Ensure CRS = EPSG:2263<br/>(project if needed)]
+    C --> D{Sample limit?}
+    D -- Yes --> E[Subset first N features<br/>(preview/tuning)]
+    D -- No --> F[Use all features]
+    E --> G
+    F --> G
+
+    subgraph H[Per Polygon]
+      G[Iterate polygons] --> I[Compute centerline<br/>(oriented bbox long axis)]
+      I --> J[Sample points every N ft<br/>along centerline]
+      J --> K[Build raw perpendicular transect<br/>(± reach)]
+      K --> L[Clip transect to polygon<br/>(edge-to-edge)]
+      L --> M[Accumulate centerlines & transects]
+    end
+
+    H --> N[Assemble GeoDataFrames:<br/>roadbed_centerlines, roadbed_transects,<br/>sidewalk_centerlines, sidewalk_transects]
+    N --> O[Export to GeoPackage<br/>(multi-layer .gpkg)]
+    N --> P[Export to Shapefiles<br/>(.shp per layer, optional)]
+    O --> Q[Optional: Preview plots<br/>(Matplotlib)]
+    P --> Q
+    Q --> R[Done]
+
+
 ### 2) Inputs
 
 Shapefiles (polygons):
