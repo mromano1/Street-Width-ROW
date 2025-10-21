@@ -31,31 +31,6 @@ conda activate row
 ```
 ><mark>rtree</mark> is optional but speeds up spatial operations.
 
-flowchart TD
-    A[Start] --> B[Load Roadbed & Sidewalk Shapefiles<br/>via GeoPandas/Fiona]
-    B --> C[Ensure CRS = EPSG:2263<br/>(project if needed)]
-    C --> D{Sample limit?}
-    D -- Yes --> E[Subset first N features<br/>(preview/tuning)]
-    D -- No --> F[Use all features]
-    E --> G
-    F --> G
-
-    subgraph H[Per Polygon]
-      G[Iterate polygons] --> I[Compute centerline<br/>(oriented bbox long axis)]
-      I --> J[Sample points every N ft<br/>along centerline]
-      J --> K[Build raw perpendicular transect<br/>(± reach)]
-      K --> L[Clip transect to polygon<br/>(edge-to-edge)]
-      L --> M[Accumulate centerlines & transects]
-    end
-
-    H --> N[Assemble GeoDataFrames:<br/>roadbed_centerlines, roadbed_transects,<br/>sidewalk_centerlines, sidewalk_transects]
-    N --> O[Export to GeoPackage<br/>(multi-layer .gpkg)]
-    N --> P[Export to Shapefiles<br/>(.shp per layer, optional)]
-    O --> Q[Optional: Preview plots<br/>(Matplotlib)]
-    P --> Q
-    Q --> R[Done]
-
-
 ### 2) Inputs
 
 Shapefiles (polygons):
@@ -65,10 +40,32 @@ Recommended CRS: EPSG:2263 (US feet). The script will set/convert to 2263 if nee
 
 ### 3) Key parameters
 
---road_interval_ft, --side_interval_ft: spacing between transects (default 20 ft).
---road_reach_ft, --side_reach_ft: half-length of each raw perpendicular line before clipping (defaults: 600 ft roadbeds, 200 ft sidewalks).
---sample_limit: first N features per layer for preview (-1 = process all).
---no_shp: disable Shapefile export (GeoPackage only).
+# --- Parameters: edit these for your data/env ---
+
+```python
+# Required inputs (polygon shapefiles)
+ROADBED_SHP  = "/path/to/Roadbed_Exported_test.shp"
+SIDEWALK_SHP = "/path/to/SIDEWALK_Export_test.shp"
+
+# Outputs
+OUT_GPKG = "/path/to/ROW_outputs.gpkg"   # multi-layer GeoPackage
+# Shapefiles will be written alongside the notebook working directory unless you change the paths below.
+
+# Spacing & reach (feet; EPSG:2263 recommended)
+ROAD_INTERVAL_FT = 20.0   # spacing between roadbed transects
+SIDE_INTERVAL_FT = 20.0   # spacing between sidewalk transects
+ROAD_REACH_FT    = 600.0  # half-length of raw perpendicular for roadbeds (longer = safer across wide ROW)
+SIDE_REACH_FT    = 200.0  # half-length for sidewalks (narrower)
+
+# Quick preview limit: set to None for all features; N for faster iteration
+SAMPLE_LIMIT = 10
+
+# Also export Shapefiles as standalone layers?
+EXPORT_SHP = True
+
+# Target CRS: State Plane NY Long Island (US foot) — change if your region differs
+TARGET_CRS = "EPSG:2263"
+```
 
 ### 4) Run the script
 
