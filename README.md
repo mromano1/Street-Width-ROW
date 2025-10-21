@@ -15,12 +15,12 @@
 
 > **Note**: I use an **oriented minimum bounding rectangle** centerline (fast & robust for elongated ROW polygons). If you need more “center-of-mass” fidelity for very irregular shapes, you can swap in a skeletonization method later (e.g., momepy) while keeping the rest of the pipeline the same.
 
-# Requirements
--Python 3.10+
--geopandas, shapely >= 2.0, fiona
--(Optional: rtree or pygeos for spatial indexing performance)*
+## Notes & Extensions
 
-If you see a Shapely/NumPy array-interface error, ensure you are using the default Fiona reader via GeoPandas. This notebook uses GeoPandas' standard I/O.
+- **CRS**: Distances (interval, reach) assume a projected CRS in linear units (feet/meters). This notebook defaults to **EPSG:2263** (NY State Plane feet).
+- **Edge cases**: Very irregular or branched polygons may not be well-captured by a single straight-axis centerline. Consider swapping in `momepy.skeletonize` to derive a medial axis if needed.
+- **Attributes**: If you need attributes on transects (e.g., join back to original polygon IDs), carry IDs through the loops and build GeoDataFrames with those columns before exporting.
+- **Performance**: For huge layers, run per borough/tile, or increase interval and reduce reach for faster processing during prototyping.
 
 ### 1) Environment setup
 
@@ -208,4 +208,188 @@ def clip_transect(tran: LineString, poly: Polygon):
     return LineString([pts[0], pts[-1]])
 ```
 
+### 7) Build Transects
+For each polygon:
+- compute the centerline
+- sample points along it at the configured interval
+- build + clip a perpendicular transect for each sample
+
+We return both the centerline and the list of final (clipped) transects.
+
+```python
+def build_transects(poly: Polygon, interval: float = 20.0, reach: float = 200.0):
+    """Return (centerline, [transects...]) for a polygon."""
+    center = oriented_bbox_axis(poly)
+    pts = sample_points_along_line(center, interval)
+    lines = []
+    for p in pts:
+        t = unit_tangent(center, center.project(p))
+        raw = perpendicular_transect(p, t, reach)
+        clipped = clip_transect(raw, poly)
+        if clipped and clipped.length > 0:
+            lines.append(clipped)
+    return center, lines
+```
+
+### 8) Pipeline
+1. **Read** roadbed/sidewalk shapefiles (via GeoPandas/Fiona)
+2. **Ensure CRS** is EPSG:2263 (feet) for consistent distance math
+3. **Optionally sample** first _N_ features for quick iteration
+4. **Loop over polygons** and build centerlines/transects
+5. **Assemble GeoDataFrames** for export
+
+```python
+def process(
+    roadbed_path: str,
+    sidewalk_path: str,
+    out_gpkg: str,
+    road_interval_ft: float = 20.0,
+    side_interval_ft: float = 20.0,
+    road_reach_ft: float = 600.0,
+    side_reach_ft: float = 200.0,
+    sample_limit: int | None = 10,
+    export_shapefiles: bool = True,
+    target_crs: str = TARGET_CRS,
+):
+    # 1) Read
+    road = gpd.read_file(roadbed_path)
+    side = gpd.read_file(sidewalk_path)
+
+    # 2) CRS handling
+    if road.crs is None:
+        road = road.set_crs(target_crs)
+    else:
+        road = road.to_crs(target_crs)
+    if side.crs is None:
+        side = side.set_crs(target_crs)
+    else:
+        side = side.to_crs(target_crs)
+
+    # 3) Optional sampling
+    if sample_limit is not None:
+        road = road.head(sample_limit)
+        side = side.head(sample_limit)
+
+    # 4) Build per layer
+    road_centers, road_trs = [], []
+    for poly in road.geometry:
+        if poly is None:
+            continue
+        if isinstance(poly, MultiPolygon):
+            for p in poly.geoms:
+                c, trs = build_transects(p, interval=road_interval_ft, reach=road_reach_ft)
+                road_centers.append(c)
+                road_trs.extend(trs)
+        elif isinstance(poly, Polygon):
+            c, trs = build_transects(poly, interval=road_interval_ft, reach=road_reach_ft)
+            road_centers.append(c)
+            road_trs.extend(trs)
+
+    side_centers, side_trs = [], []
+    for poly in side.geometry:
+        if poly is None:
+            continue
+        if isinstance(poly, MultiPolygon):
+            for p in poly.geoms:
+                c, trs = build_transects(p, interval=side_interval_ft, reach=side_reach_ft)
+                side_centers.append(c)
+                side_trs.extend(trs)
+        elif isinstance(poly, Polygon):
+            c, trs = build_transects(poly, interval=side_interval_ft, reach=side_reach_ft)
+            side_centers.append(c)
+            side_trs.extend(trs)
+
+    # 5) Assemble GDFs
+    gdf_rc = gpd.GeoDataFrame(geometry=road_centers, crs=target_crs)
+    gdf_rt = gpd.GeoDataFrame(geometry=road_trs, crs=target_crs)
+    gdf_sc = gpd.GeoDataFrame(geometry=side_centers, crs=target_crs)
+    gdf_st = gpd.GeoDataFrame(geometry=side_trs, crs=target_crs)
+
+    return gdf_rc, gdf_rt, gdf_sc, gdf_st
+```
+
+### 9) Run the Pipeline
+```python
+gdf_rc, gdf_rt, gdf_sc, gdf_st = process(
+    roadbed_path=ROADBED_SHP,
+    sidewalk_path=SIDEWALK_SHP,
+    out_gpkg=OUT_GPKG,
+    road_interval_ft=ROAD_INTERVAL_FT,
+    side_interval_ft=SIDE_INTERVAL_FT,
+    road_reach_ft=ROAD_REACH_FT,
+    side_reach_ft=SIDE_REACH_FT,
+    sample_limit=SAMPLE_LIMIT,
+    export_shapefiles=EXPORT_SHP,
+    target_crs=TARGET_CRS,
+)
+
+print(f"Roadbed centerlines: {len(gdf_rc)}")
+print(f"Roadbed transects:   {len(gdf_rt)}")
+print(f"Sidewalk centerlines:{len(gdf_sc)}")
+print(f"Sidewalk transects:  {len(gdf_st)}")
+```
+
+### 10) Exports
+We write both:
+- **GeoPackage** (multi-layer, single file)
+- **Shapefiles** (one per layer), which are convenient for many GIS tools
+
+```python
+# --- GeoPackage (multi-layer) ---
+out_gpkg_path = Path(OUT_GPKG)
+try:
+    out_gpkg_path.unlink(missing_ok=True)  # start clean
+except Exception:
+    pass
+
+gdf_rc.to_file(OUT_GPKG, layer="roadbed_centerlines", driver="GPKG")
+gdf_rt.to_file(OUT_GPKG, layer="roadbed_transects",   driver="GPKG")
+gdf_sc.to_file(OUT_GPKG, layer="sidewalk_centerlines", driver="GPKG")
+gdf_st.to_file(OUT_GPKG, layer="sidewalk_transects",   driver="GPKG")
+
+print(f"✅ GeoPackage written: {out_gpkg_path.resolve()}")
+
+# --- Shapefiles (standalone) ---
+if EXPORT_SHP:
+    shp_rc = Path("roadbed_centerlines.shp")
+    shp_rt = Path("roadbed_transects.shp")
+    shp_sc = Path("sidewalk_centerlines.shp")
+    shp_st = Path("sidewalk_transects.shp")
+
+    for shp in (shp_rc, shp_rt, shp_sc, shp_st):
+        _delete_shapefile(shp)
+
+    gdf_rc.to_file(shp_rc)
+    gdf_rt.to_file(shp_rt)
+    gdf_sc.to_file(shp_sc)
+    gdf_st.to_file(shp_st)
+
+    print("✅ Shapefiles written: roadbed_centerlines.shp, roadbed_transects.shp, sidewalk_centerlines.shp, sidewalk_transects.shp")
+```
+
+### 11) Visualization for QA
+Simple stacked previews:
+- Top panel: **roadbed** centerlines + transects
+- Bottom panel: **sidewalk** centerlines + transects
+
+> Tip: For large datasets, keep `SAMPLE_LIMIT` small to render quickly.
+
+```python
+fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(10, 12))
+
+# Roadbed
+gdf_rt.plot(ax=ax1, linewidth=0.8)  # transects
+gdf_rc.plot(ax=ax1, linewidth=2)    # centerlines
+ax1.set_title("Roadbed: Centerlines & Transects")
+ax1.set_axis_off()
+
+# Sidewalk
+gdf_st.plot(ax=ax2, linewidth=0.8)
+gdf_sc.plot(ax=ax2, linewidth=2)
+ax2.set_title("Sidewalk: Centerlines & Transects")
+ax2.set_axis_off()
+
+plt.tight_layout()
+plt.show()
+```
 
