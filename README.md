@@ -67,6 +67,45 @@ EXPORT_SHP = True
 TARGET_CRS = "EPSG:2263"
 ```
 
-### 4) Run the script
+### 4) Imports & Setup
 
-Preview (first 10 features):
+```python
+from __future__ import annotations
+
+import math
+from pathlib import Path
+from typing import List, Tuple
+
+import geopandas as gpd
+from shapely.geometry import LineString, Point, Polygon, MultiPolygon
+import matplotlib.pyplot as plt
+
+# Optional: make plots look crisper in notebooks
+%matplotlib inline
+```
+
+### Utility Helpers
+- `_delete_if_exists` & `_delete_shapefile`: ensure clean exports across re-runs
+- CRS handling lives in the main pipeline; these helpers only manage files
+
+```python
+def _delete_if_exists(path: Path) -> None:
+    """Delete a single file if it exists (ignore errors)."""
+    try:
+        path.unlink(missing_ok=True)
+    except Exception:
+        pass
+
+def _delete_shapefile(shp_path: Path) -> None:
+    """Delete a shapefile *family* (.shp/.shx/.dbf/.prj/.cpg/.sbn/.sbx/.shp.xml/.qix) if present.
+
+    This avoids stale sidecar conflicts when re-running exports.
+    """
+    shp_path = Path(shp_path)
+    stem = shp_path.with_suffix("")  # remove .shp
+    for ext in [".shp", ".shx", ".dbf", ".prj", ".cpg", ".sbn", ".sbx", ".shp.xml", ".qix"]:
+        _delete_if_exists(stem.parent / f"{stem.name}{ext}")
+```
+
+
+
