@@ -1,4 +1,4 @@
-#Street Width ROW with GeoPandas
+# Street Width ROW with GeoPandas
 This notebook reproduces the documented Street_Width_ROW_GeoPandas_Documented.py script in an interactive format.
 It:
 
@@ -8,13 +8,14 @@ Generates perpendicular transects every N feet along each centerline
 Clips each transect to polygon edges
 Exports to both a GeoPackage (multi‑layer) and Shapefiles
 
-#Requirements
+# Requirements
 Python 3.10+
 geopandas, shapely >= 2.0, fiona
 (Optional: rtree or pygeos for spatial indexing performance)*
-Tip: If you see a Shapely/NumPy array-interface error, ensure you are using the default Fiona reader via GeoPandas. This notebook uses GeoPandas' standard I/O.
 
-1) Environment setup
+If you see a Shapely/NumPy array-interface error, ensure you are using the default Fiona reader via GeoPandas. This notebook uses GeoPandas' standard I/O.
+
+### 1) Environment setup
 
 ```python
 # Create and activate an environment
