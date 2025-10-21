@@ -40,9 +40,9 @@ Recommended CRS: EPSG:2263 (US feet). The script will set/convert to 2263 if nee
 
 ### 3) Key parameters
 
-# --- Parameters: edit these for your data/env ---
-
 ```python
+#---Parameters: edit these for your data/env ---
+
 # Required inputs (polygon shapefiles)
 ROADBED_SHP  = "/path/to/Roadbed_Exported_test.shp"
 SIDEWALK_SHP = "/path/to/SIDEWALK_Export_test.shp"
