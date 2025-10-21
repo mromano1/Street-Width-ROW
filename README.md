@@ -1,25 +1,9 @@
-# 📦 Street Width ROW
+Workflow: Street Width ROW with GeoPandas (No ArcPy)
+1) Environment setup
 
-> Short one-line description or tagline for your project.
-
-## 📖 About
-
-Briefly describe what the project does and who it's for.
-
-Example:
-This is a [type of project] designed to [solve a problem / perform a function]. Built with [language/framework/tools used], it provides [feature list or core value].
-
-## 🚀 Features
-
-- ✅ Feature 1
-- ✅ Feature 2
-- ✅ Feature 3
-- 🔜 Planned: Feature 4
-
-## Method
-
-
-
-## Final report
-
+'''
+# Create and activate an environment
+conda create -n row python=3.11 geopandas shapely fiona rtree -c conda-forge
+conda activate row
+'''
 
