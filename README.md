@@ -22,7 +22,7 @@ If you see a Shapely/NumPy array-interface error, ensure you are using the defau
 conda create -n row python=3.11 geopandas shapely fiona rtree -c conda-forge
 conda activate row
 ```
-==rtree== is optional but speeds up spatial operations.
+<mark>rtree</mark> is optional but speeds up spatial operations.
 
 ### 2) Inputs
 
