@@ -1,12 +1,19 @@
-# Street Width ROW with GeoPandas
-This notebook reproduces the documented Street_Width_ROW_GeoPandas_Documented.py script in an interactive format.
-It:
+# Street Width ROW using Python/GeoPandas
 
-1. Loads Roadbed and Sidewalk polygons (EPSG:2263 recommended)
-2. Derives an approximate centerline per polygon (oriented bounding box axis)
-3. Generates perpendicular transects every N feet along each centerline
-4. Clips each transect to polygon edges
-5. Exports to both a GeoPackage (multi‑layer) and Shapefiles
+1. **Load** roadbed & sidewalk polygons
+2. **Create centerlines** (via oriented bounding box long axis)
+3. **Generate perpendicular transects** every _N_ feet along each centerline
+4. **Clip** each transect so it ends exactly at polygon boundaries
+5. **Export** results to a GeoPackage and Shapefiles
+6. (Optional) **Visualize** centerlines and transects
+
+### Why these libraries?
+- **GeoPandas**: idiomatic vector GIS operations (read/write, CRS handling, vectorized ops) using GDAL/Fiona/Shapely under the hood.
+- **Shapely ≥ 2.0**: modern, robust geometry predicates/ops (buffer, clip, intersection, line interpolation). Crucial for clipping transects to polygon edges.
+- **Fiona** (via GeoPandas I/O): stable read/write of Shapefile/GeoPackage formats.
+- **Matplotlib**: lightweight map previews for QA (no heavy styling required).
+
+> **Note**: I use an **oriented minimum bounding rectangle** centerline (fast & robust for elongated ROW polygons). If you need more “center-of-mass” fidelity for very irregular shapes, you can swap in a skeletonization method later (e.g., momepy) while keeping the rest of the pipeline the same.
 
 # Requirements
 -Python 3.10+
