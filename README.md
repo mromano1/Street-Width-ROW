@@ -63,21 +63,21 @@ Recommended CRS: **EPSG:2263** (US feet). The script will set/convert to 2263 if
 from pathlib import Path
 
 # Required inputs (polygon shapefiles)
-ROADBED_SHP  = "/path/to/Roadbed_Exported_test.shp"
-SIDEWALK_SHP = "/path/to/SIDEWALK_Export_test.shp"
+ROADBED_SHP  = "/Python/Data/Roadbed_Exported_test.shp"
+SIDEWALK_SHP = "/Python/Data/SIDEWALK_Export_test.shp"
 
 # Outputs
-OUT_GPKG = "/path/to/ROW_outputs.gpkg"   # multi-layer GeoPackage
+OUT_GPKG = "/Python/Output/ROW_outputs.gpkg"   # multi-layer GeoPackage
 # Shapefiles will be written alongside the notebook working directory unless you change the paths below.
 
 # Spacing & reach (feet; EPSG:2263 recommended)
 ROAD_INTERVAL_FT = 20.0   # spacing between roadbed transects
 SIDE_INTERVAL_FT = 20.0   # spacing between sidewalk transects
-ROAD_REACH_FT    = 600.0  # half-length of raw perpendicular for roadbeds (longer = safer across wide ROW)
-SIDE_REACH_FT    = 200.0  # half-length for sidewalks (narrower)
+ROAD_REACH_FT    = 200.0  # half-length of raw perpendicular for roadbeds (longer = safer across wide ROW)
+SIDE_REACH_FT    = 50.0  # half-length for sidewalks (narrower)
 
 # Quick preview limit: set to None for all features; N for faster iteration
-SAMPLE_LIMIT = 10
+SAMPLE_LIMIT = None
 
 # Also export Shapefiles as standalone layers?
 EXPORT_SHP = True
