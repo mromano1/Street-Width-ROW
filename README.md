@@ -1,19 +1,19 @@
 # Street Width ROW using Python/GeoPandas
 
-1. **Load** roadbed & sidewalk polygons
-2. **Create centerlines** (via oriented bounding box long axis)
-3. **Generate perpendicular transects** every _N_ feet along each centerline
-4. **Clip** each transect so it ends exactly at polygon boundaries
-5. **Export** results to a GeoPackage and Shapefiles
-6. (Optional) **Visualize** centerlines and transects
+This notebook builds “tape‑measure” transects across each Right‑of‑Way (ROW) polygon (roadbeds and sidewalks). For each polygon, we create a fast, stable proxy **centerline** from the polygon’s **oriented minimum bounding rectangle**, sample points along it, emit **perpendicular** lines, and **clip** those lines exactly to the polygon edges so each transect spans boundary‑to‑boundary. The result is a defensible set of width measurements at regular intervals.
 
-### Why these libraries?
-- **GeoPandas**: idiomatic vector GIS operations (read/write, CRS handling, vectorized ops) using GDAL/Fiona/Shapely under the hood.
-- **Shapely ≥ 2.0**: modern, robust geometry predicates/ops (buffer, clip, intersection, line interpolation). Crucial for clipping transects to polygon edges.
-- **Fiona** (via GeoPandas I/O): stable read/write of Shapefile/GeoPackage formats.
+
+
+## Why these libraries?
+
+- **GeoPandas**: idiomatic vector GIS operations (read/write, CRS handling, vectorized ops) using GDAL/Fiona/Shapely under the hood.  
+- **Shapely ≥ 2.0**: modern, robust geometry predicates/ops (buffer, clip, intersection, line interpolation). Crucial for clipping transects to polygon edges.  
+- **Fiona** (via GeoPandas I/O): stable read/write of Shapefile/GeoPackage formats.  
 - **Matplotlib**: lightweight map previews for QA (no heavy styling required).
 
-> **Note**: I use an **oriented minimum bounding rectangle** centerline (fast & robust for elongated ROW polygons). If you need more “center-of-mass” fidelity for very irregular shapes, you can swap in a skeletonization method later (e.g., momepy) while keeping the rest of the pipeline the same.
+> **Note**: This notebook uses an **oriented minimum bounding rectangle** centerline (fast & robust for elongated ROW polygons). If you need more “center‑of‑mass” fidelity for very irregular shapes, you can swap in a skeletonization method later (e.g., `momepy`) while keeping the rest of the pipeline the same.
+
+
 
 ## Notes & Extensions
 
@@ -22,26 +22,45 @@
 - **Attributes**: If you need attributes on transects (e.g., join back to original polygon IDs), carry IDs through the loops and build GeoDataFrames with those columns before exporting.
 - **Performance**: For huge layers, run per borough/tile, or increase interval and reduce reach for faster processing during prototyping.
 
-### 1) Environment setup
 
-```python
-# Create and activate an environment
+
+## 1) Environment setup
+
+Create and activate a conda environment with the geospatial stack (run in a terminal, not in this notebook):
+
+```bash
 conda create -n row python=3.11 geopandas shapely fiona rtree -c conda-forge
 conda activate row
 ```
-><mark>rtree</mark> is optional but speeds up spatial operations.
+> `rtree` is optional but speeds up spatial operations.
 
-### 2) Inputs
+
+
+## 2) Inputs
 
 Shapefiles (polygons):
-Roadbed_... .shp
-SIDEWALK_... .shp
-Recommended CRS: EPSG:2263 (US feet). The script will set/convert to 2263 if needed.
 
-### 3) Key parameters
+- `Roadbed_... .shp`
+- `SIDEWALK_... .shp`
+
+Recommended CRS: **EPSG:2263** (US feet). The script will set/convert to 2263 if needed.
+
+
+
+## 3) Key parameters
+
+**Exactly what this cell does:**  
+- Defines input paths and output locations.  
+- Sets spacing (**interval**) between transects and the half‑length (**reach**) of raw perpendiculars before clipping.  
+- Configures sampling for quick iteration, Shapefile export toggle, and the target CRS in feet.
+
+
 
 ```python
-#---Parameters: edit these for your data/env ---
+
+# --- Parameters: edit these for your data/env ---
+
+from pathlib import Path
 
 # Required inputs (polygon shapefiles)
 ROADBED_SHP  = "/path/to/Roadbed_Exported_test.shp"
@@ -65,65 +84,83 @@ EXPORT_SHP = True
 
 # Target CRS: State Plane NY Long Island (US foot) — change if your region differs
 TARGET_CRS = "EPSG:2263"
+
 ```
 
-### 4) Imports & Setup
+
+## 4) Imports & Setup
+
+**Exactly what this cell does:**  
+- Imports core libraries.  
+- Sets up Matplotlib inline plotting (for QA).  
+- Does not alter global styles; plots are intentionally simple.
+
+
 
 ```python
+
 from __future__ import annotations
 
 import math
-from pathlib import Path
 from typing import List, Tuple
 
 import geopandas as gpd
 from shapely.geometry import LineString, Point, Polygon, MultiPolygon
 import matplotlib.pyplot as plt
 
-# Optional: make plots look crisper in notebooks
+# Optional: make plots render in notebooks
 %matplotlib inline
+
 ```
 
-### 5) Utility Helpers
-- `_delete_if_exists` & `_delete_shapefile`: ensure clean exports across re-runs
-- CRS handling lives in the main pipeline; these helpers only manage files
+
+## 5) Utility Helpers
+
+**Exactly what this cell does:**  
+- Provides safe file deletion helpers to clear previous exports (especially Shapefile sidecars) so you don’t get stale/locked files on re-runs.
+
+
 
 ```python
+
 def _delete_if_exists(path: Path) -> None:
     """Delete a single file if it exists (ignore errors)."""
     try:
-        path.unlink(missing_ok=True)
+        Path(path).unlink(missing_ok=True)
     except Exception:
         pass
 
 def _delete_shapefile(shp_path: Path) -> None:
     """Delete a shapefile *family* (.shp/.shx/.dbf/.prj/.cpg/.sbn/.sbx/.shp.xml/.qix) if present.
-
     This avoids stale sidecar conflicts when re-running exports.
     """
     shp_path = Path(shp_path)
     stem = shp_path.with_suffix("")  # remove .shp
     for ext in [".shp", ".shx", ".dbf", ".prj", ".cpg", ".sbn", ".sbx", ".shp.xml", ".qix"]:
         _delete_if_exists(stem.parent / f"{stem.name}{ext}")
+
 ```
 
-### 6) Geometry Foundations
-We build centerlines from the oriented minimum bounding rectangle (MBR) and then:
-1. Sample points along that centerline every *interval* feet
-2. At each sample, compute the **tangent** direction of the centerline
-3. Build a **perpendicular** “raw” transect (long line = ±reach)
-4. **Clip** the transect to the polygon, keeping the interior span (exact edge-to-edge)
 
-This produces width-spanning transects that are perpendicular to an axis aligned with the polygon’s dominant orientation — ideal for ROW estimation.
+## 6) Geometry Foundations
+
+**Exactly what this cell does:**  
+- Builds a straight‑line **centerline proxy** from the polygon’s **minimum rotated rectangle** (longest edge).  
+- Samples points along that centerline at a fixed interval.  
+- Computes a unit **tangent** at each sample and rotates it 90° to get a **perpendicular** (normal).  
+- Creates a long raw transect for each sample and **clips** it to the polygon boundaries so endpoints lie on the edges (or to the longest interior piece if boundary intersections are messy).
+
+
 
 ```python
+
 def oriented_bbox_axis(poly: Polygon) -> LineString:
     """Return a straight line representing the *long* edge of the polygon's oriented MBR.
-
     This provides a stable, fast proxy for a “centerline” through elongated polygons.
     """
     mbr = poly.minimum_rotated_rectangle
     coords = list(mbr.exterior.coords)[:-1]  # drop duplicate closing coord
+    # There should be 4 unique coords for the rectangle
     edges = [(coords[i], coords[(i + 1) % 4]) for i in range(4)]
     lengths = [Point(a).distance(Point(b)) for a, b in edges]
     a, b = edges[lengths.index(max(lengths))]
@@ -145,7 +182,6 @@ def sample_points_along_line(line: LineString, interval: float) -> List[Point]:
 
 def unit_tangent(line: LineString, s: float) -> Tuple[float, float]:
     """Approximate a unit tangent vector at position `s` along a line.
-
     Uses a small forward/backward difference (±0.01 linear units).
     """
     L = line.length
@@ -206,17 +242,20 @@ def clip_transect(tran: LineString, poly: Polygon):
     # 4) Order the points along the transect and connect extremes
     pts.sort(key=lambda p: tran.project(p))
     return LineString([pts[0], pts[-1]])
+
 ```
 
-### 7) Build Transects
-For each polygon:
-- compute the centerline
-- sample points along it at the configured interval
-- build + clip a perpendicular transect for each sample
 
-We return both the centerline and the list of final (clipped) transects.
+## 7) Build Transects
+
+**Exactly what this cell does:**  
+- For a single polygon, computes the centerline, samples points at the configured interval, creates perpendiculars, and clips them.  
+- Returns `(centerline, [clipped_transects...])`.
+
+
 
 ```python
+
 def build_transects(poly: Polygon, interval: float = 20.0, reach: float = 200.0):
     """Return (centerline, [transects...]) for a polygon."""
     center = oriented_bbox_axis(poly)
@@ -229,16 +268,23 @@ def build_transects(poly: Polygon, interval: float = 20.0, reach: float = 200.0)
         if clipped and clipped.length > 0:
             lines.append(clipped)
     return center, lines
+
 ```
 
-### 8) Pipeline
-1. **Read** roadbed/sidewalk shapefiles (via GeoPandas/Fiona)
-2. **Ensure CRS** is EPSG:2263 (feet) for consistent distance math
-3. **Optionally sample** first _N_ features for quick iteration
-4. **Loop over polygons** and build centerlines/transects
-5. **Assemble GeoDataFrames** for export
+
+## 8) Pipeline
+
+**Exactly what this cell does:**  
+1. **Read** roadbed/sidewalk shapefiles (via GeoPandas/Fiona).  
+2. **Ensure CRS** is EPSG:2263 (feet) for consistent distance math.  
+3. **Optionally sample** first *N* features for quick iteration.  
+4. **Loop over polygons** and build centerlines/transects (handling MultiPolygons).  
+5. **Assemble GeoDataFrames** for export and return them.
+
+
 
 ```python
+
 def process(
     roadbed_path: str,
     sidewalk_path: str,
@@ -249,7 +295,7 @@ def process(
     side_reach_ft: float = 200.0,
     sample_limit: int | None = 10,
     export_shapefiles: bool = True,
-    target_crs: str = TARGET_CRS,
+    target_crs: str = "EPSG:2263",
 ):
     # 1) Read
     road = gpd.read_file(roadbed_path)
@@ -306,10 +352,23 @@ def process(
     gdf_st = gpd.GeoDataFrame(geometry=side_trs, crs=target_crs)
 
     return gdf_rc, gdf_rt, gdf_sc, gdf_st
+
 ```
 
-### 9) Run the Pipeline
+
+## 9) Run the Pipeline
+
+**Exactly what this cell does:**  
+- Executes the process with your parameters.  
+- Prints basic counts to confirm output density.  
+- If counts look low, check CRS and increase `*_REACH_FT`.
+
+
+
 ```python
+
+# Execute the pipeline (edit paths above first)
+# NOTE: This will fail if the input paths are placeholders.
 gdf_rc, gdf_rt, gdf_sc, gdf_st = process(
     roadbed_path=ROADBED_SHP,
     sidewalk_path=SIDEWALK_SHP,
@@ -327,14 +386,20 @@ print(f"Roadbed centerlines: {len(gdf_rc)}")
 print(f"Roadbed transects:   {len(gdf_rt)}")
 print(f"Sidewalk centerlines:{len(gdf_sc)}")
 print(f"Sidewalk transects:  {len(gdf_st)}")
+
 ```
 
-### 10) Exports
-We write both:
-- **GeoPackage** (multi-layer, single file)
-- **Shapefiles** (one per layer), which are convenient for many GIS tools
+
+## 10) Exports
+
+**Exactly what this cell does:**  
+- Writes a clean **GeoPackage** with four layers.  
+- Optionally clears and writes **Shapefiles** for compatibility.
+
+
 
 ```python
+
 # --- GeoPackage (multi-layer) ---
 out_gpkg_path = Path(OUT_GPKG)
 try:
@@ -365,16 +430,20 @@ if EXPORT_SHP:
     gdf_st.to_file(shp_st)
 
     print("✅ Shapefiles written: roadbed_centerlines.shp, roadbed_transects.shp, sidewalk_centerlines.shp, sidewalk_transects.shp")
+
 ```
 
-### 11) Visualization for QA
-Simple stacked previews:
-- Top panel: **roadbed** centerlines + transects
-- Bottom panel: **sidewalk** centerlines + transects
 
-> Tip: For large datasets, keep `SAMPLE_LIMIT` small to render quickly.
+## 11) Visualization for QA
+
+**Exactly what this cell does:**  
+- Produces a quick two‑panel plot showing centerlines (bold) and transects (thin) for roadbeds and sidewalks.  
+- For large datasets, keep `SAMPLE_LIMIT` small to render quickly.
+
+
 
 ```python
+
 fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(10, 12))
 
 # Roadbed
@@ -391,5 +460,14 @@ ax2.set_axis_off()
 
 plt.tight_layout()
 plt.show()
+
 ```
+
+
+## Troubleshooting Cheatsheet
+
+- **Transects too short / don’t reach edges** → Increase `ROAD_REACH_FT` / `SIDE_REACH_FT`.
+- **Widths look wrong by a scale factor** → CRS mismatch; ensure `TARGET_CRS` is feet and inputs are reprojected.
+- **Few/no transects** → Check geometry validity (try `poly.buffer(0)`), verify that polygons aren’t tiny/degenerate.
+- **Performance slow** → Use `SAMPLE_LIMIT` during dev; tile data; increase `interval`; keep visualization off until the end.
 
