@@ -14684,21 +14684,21 @@ conda activate row
 <span class="kn">from</span> <span class="nn">pathlib</span> <span class="kn">import</span> <span class="n">Path</span>
 
 <span class="c1"># Required inputs (polygon shapefiles)</span>
-<span class="n">ROADBED_SHP</span>  <span class="o">=</span> <span class="s2">&quot;/path/to/Roadbed_Exported_test.shp&quot;</span>
-<span class="n">SIDEWALK_SHP</span> <span class="o">=</span> <span class="s2">&quot;/path/to/SIDEWALK_Export_test.shp&quot;</span>
+<span class="n">ROADBED_SHP</span>  <span class="o">=</span> <span class="s2">&quot;/Python/Data/Roadbed_Exported_test.shp&quot;</span>
+<span class="n">SIDEWALK_SHP</span> <span class="o">=</span> <span class="s2">&quot;/Python/Data/SIDEWALK_Export_test.shp&quot;</span>
 
 <span class="c1"># Outputs</span>
-<span class="n">OUT_GPKG</span> <span class="o">=</span> <span class="s2">&quot;/path/to/ROW_outputs.gpkg&quot;</span>   <span class="c1"># multi-layer GeoPackage</span>
+<span class="n">OUT_GPKG</span> <span class="o">=</span> <span class="s2">&quot;/Python/Output/ROW_outputs.gpkg&quot;</span>   <span class="c1"># multi-layer GeoPackage</span>
 <span class="c1"># Shapefiles will be written alongside the notebook working directory unless you change the paths below.</span>
 
 <span class="c1"># Spacing &amp; reach (feet; EPSG:2263 recommended)</span>
 <span class="n">ROAD_INTERVAL_FT</span> <span class="o">=</span> <span class="mf">20.0</span>   <span class="c1"># spacing between roadbed transects</span>
 <span class="n">SIDE_INTERVAL_FT</span> <span class="o">=</span> <span class="mf">20.0</span>   <span class="c1"># spacing between sidewalk transects</span>
-<span class="n">ROAD_REACH_FT</span>    <span class="o">=</span> <span class="mf">600.0</span>  <span class="c1"># half-length of raw perpendicular for roadbeds (longer = safer across wide ROW)</span>
-<span class="n">SIDE_REACH_FT</span>    <span class="o">=</span> <span class="mf">200.0</span>  <span class="c1"># half-length for sidewalks (narrower)</span>
+<span class="n">ROAD_REACH_FT</span>    <span class="o">=</span> <span class="mf">200.0</span>  <span class="c1"># half-length of raw perpendicular for roadbeds (longer = safer across wide ROW)</span>
+<span class="n">SIDE_REACH_FT</span>    <span class="o">=</span> <span class="mf">50.0</span>  <span class="c1"># half-length for sidewalks (narrower)</span>
 
 <span class="c1"># Quick preview limit: set to None for all features; N for faster iteration</span>
-<span class="n">SAMPLE_LIMIT</span> <span class="o">=</span> <span class="mi">10</span>
+<span class="n">SAMPLE_LIMIT</span> <span class="o">=</span> <span class="kc">None</span>
 
 <span class="c1"># Also export Shapefiles as standalone layers?</span>
 <span class="n">EXPORT_SHP</span> <span class="o">=</span> <span class="kc">True</span>
